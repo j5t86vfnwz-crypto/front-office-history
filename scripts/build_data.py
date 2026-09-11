@@ -129,7 +129,7 @@ VERIFIED_TEAM_CAP: dict[str, int] = {
 # Source-table repairs are deliberately narrow and auditable. The nfldata trade
 # table does not represent every hop when a pick is traded multiple times.
 VERIFIED_PICK_OWNERS: dict[tuple[int, int], str] = {
-    (2018, 123): "CLE",  # Sent to Miami for Jarvis Landry after the snapshot.
+    **{(2018, pick): "CLE" for pick in (1, 4, 33, 35, 64, 65, 101, 123, 138, 159, 175, 219)},
     (2018, 188): "WAS",  # Acquired by Cleveland from Washington on April 5.
 }
 
