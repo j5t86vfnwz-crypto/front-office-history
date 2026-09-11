@@ -66,6 +66,14 @@ if helper.strip() not in html:
 
 if GAME_JS.exists():
     game_js=GAME_JS.read_text(encoding='utf-8')
+    # The generated bundle's verified exact team/year anchors must stay authoritative
+    # in the browser too. The raw game layer originally checked noisy formation depth
+    # tier first, which could undo a verified correction such as Dallas 2026 WR2.
+    old_order="if(ah!==bh)return ah?-1:1;if(at!==bt)return at-bt;\n      if(aa!==ba)return aa?-1:1;if(aa&&ba&&priorityMap.get(an)!==priorityMap.get(bn))return priorityMap.get(an)-priorityMap.get(bn);"
+    new_order="if(aa!==ba)return aa?-1:1;if(aa&&ba&&priorityMap.get(an)!==priorityMap.get(bn))return priorityMap.get(an)-priorityMap.get(bn);\n      if(ah!==bh)return ah?-1:1;if(at!==bt)return at-bt;"
+    if old_order not in game_js:
+        raise SystemExit('Expected roster-order comparator not found in game layer')
+    game_js=game_js.replace(old_order,new_order,1)
     marker='// ===== FRONT OFFICE HISTORY: GAME LAYER ====='
     if marker not in html:
         html=html.replace(needle,game_js+'\n'+needle,1)
