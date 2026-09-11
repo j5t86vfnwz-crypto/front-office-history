@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.cache/
+build/raw/
+build/tmp/
+.DS_Store
+dist/index.html
+dist/data/

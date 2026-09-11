@@ -1,0 +1,58 @@
+name: Build and audit Front Office History
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/build.yml'
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUNBUFFERED: '1'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore historical-data download cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: foh-nfl-data-v1-${{ runner.os }}
+      - name: Source URL/coverage contract
+        run: python tests/test_source_contract.py
+      - name: Unit-test roster ordering five times
+        run: python tests/test_roster_order.py
+      - name: Build bundled 2010-2026 historical database
+        run: python scripts/build_data.py --years 2010:2026 --espn-free-agents
+      - name: Exhaustive historical-data audit
+        run: python scripts/audit_data.py --years 2010:2026 --passes 5
+      - name: Build frozen UI against offline database
+        run: python scripts/build_site.py
+      - name: Static smoke test
+        run: python scripts/smoke_test.py
+      - name: Install browser QA harness
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Browser interaction smoke test
+        env:
+          FOH_REQUIRE_BROWSER_QA: '1'
+        run: python scripts/browser_smoke.py
+      - name: Upload publishable site
+        uses: actions/upload-artifact@v4
+        with:
+          name: front-office-history-site
+          path: dist/
+          if-no-files-found: error
