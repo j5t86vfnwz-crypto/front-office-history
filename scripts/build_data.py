@@ -41,7 +41,7 @@ DIST.mkdir(parents=True, exist_ok=True)
 RELEASE = "https://github.com/nflverse/nflverse-data/releases/download"
 RAW = "https://raw.githubusercontent.com/nflverse/nfldata/master/data"
 URLS = {
-    "draft": f"{RAW}/draft_picks.csv",
+    "draft": f"{RELEASE}/draft_picks/draft_picks.csv",
     "trades": f"{RAW}/trades.csv",
     "games": f"{RAW}/games.csv",
     "logos": f"{RAW}/logos.csv",
@@ -124,6 +124,19 @@ FREE_AGENT_STATUSES = {"UFA","RFA","ERFA","CUT","NWT","RSR"}
 VERIFIED_TEAM_CAP: dict[str, int] = {
     # Snapshot-specific facts only. Do not fill other clubs with estimates.
     "2018|Cleveland Browns": 108_692_537,
+}
+
+# Source-table repairs are deliberately narrow and auditable. The nfldata trade
+# table does not represent every hop when a pick is traded multiple times.
+VERIFIED_PICK_OWNERS: dict[tuple[int, int], str] = {
+    (2018, 123): "CLE",  # Sent to Miami for Jarvis Landry after the snapshot.
+    (2018, 188): "WAS",  # Acquired by Cleveland from Washington on April 5.
+}
+
+# When official depth evidence leaves formation starters tied, preserve a
+# documented team room order instead of letting a noisy stat tie-break decide.
+VERIFIED_ROOM_PRIORITY: dict[tuple[int, str, str], tuple[str, ...]] = {
+    (2026, "Dallas Cowboys", "WR"): ("CeeDee Lamb", "George Pickens"),
 }
 
 
@@ -573,7 +586,7 @@ def status_priority(status:str)->int:
     return 4
 
 
-def assign_room_order(players:list[dict[str,Any]]) -> list[dict[str,Any]]:
+def assign_room_order(players:list[dict[str,Any]], team:str|None=None, offseason:int|None=None) -> list[dict[str,Any]]:
     rooms:dict[str,list[dict[str,Any]]]=defaultdict(list)
     for p in players:
         g=group_for_pos(p.get("position"));p["room_group"]=g;rooms[g].append(p)
@@ -588,6 +601,10 @@ def assign_room_order(players:list[dict[str,Any]]) -> list[dict[str,Any]]:
             status_priority(str(p.get("status") or "")),
             player_name(p).lower(),
         ))
+        priority=VERIFIED_ROOM_PRIORITY.get((offseason,team,group),())
+        if priority:
+            verified_rank={norm_name(name):i for i,name in enumerate(priority)}
+            room.sort(key=lambda p:verified_rank.get(norm_name(player_name(p)),len(priority)))
         for i,p in enumerate(room,1):
             p["room_order"]=i
             p["_officialRoomOrder"]=i
@@ -650,6 +667,8 @@ def opening_pick_owners(draft_rows, trade_rows, year:int) -> dict[int,str]:
     for r in relevant:
         n=intval(r.get("pick_number"));gave=normalize_trade_abbr(r.get("gave"));received=normalize_trade_abbr(r.get("received"))
         if owners.get(n)==received:owners[n]=gave
+    for (verified_year,pick),owner in VERIFIED_PICK_OWNERS.items():
+        if verified_year==year and pick in owners:owners[pick]=owner
     return owners
 
 
@@ -767,7 +786,7 @@ def build_year(year:int, global_data:dict[str,Any], season_data:dict[int,dict[st
     for team in TEAMS:
         roster=roster_membership(sd["roster"],sd["weekly"],team,year,master_idx)
         roster=attach_player_evidence(roster,sd["depth"],sd["stats"],sd["snaps"],prior.get("stats",[]),team,season)
-        roster=assign_room_order(roster)
+        roster=assign_room_order(roster,team,year)
         record,coach=team_record(global_data["games"],season,team)
         teams[team]={
             "rosterSeason":season,
@@ -821,7 +840,7 @@ def main():
         bundle=json.loads(fixture.read_text())
     else:
         print("Downloading global historical tables...")
-        draft=read_csv_url(URLS["draft"],"draft_picks.csv")
+        draft=read_csv_url(URLS["draft"],"draft_picks_release.csv")
         trades=read_csv_url(URLS["trades"],"trades.csv")
         games=read_csv_url(URLS["games"],"games.csv")
         try:players=read_csv_url(URLS["players"],"players.csv")

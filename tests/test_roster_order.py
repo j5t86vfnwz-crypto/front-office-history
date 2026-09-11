@@ -32,7 +32,7 @@ def test_new_schema():
     ]
     # Stats matching also indexes normalized player name via player_key fallback.
     players=b.attach_player_evidence(players,depth,stats,[],[], 'Dallas Cowboys',2025)
-    b.assign_room_order(players)
+    b.assign_room_order(players,'Dallas Cowboys',2026)
     rooms={}
     for p in players:rooms.setdefault(p['room_group'],[]).append(p)
     for v in rooms.values():v.sort(key=lambda p:p['room_order'])

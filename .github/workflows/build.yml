@@ -29,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache
-          key: foh-nfl-data-v1-${{ runner.os }}
+          key: foh-nfl-data-v2-${{ runner.os }}
       - name: Source URL/coverage contract
         run: python tests/test_source_contract.py
       - name: Unit-test roster ordering five times

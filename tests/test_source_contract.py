@@ -14,6 +14,13 @@ def main():
     assert u["stats"].endswith("/stats_player/stats_player_reg_2025.csv")
     assert u["snaps"].endswith("/snap_counts/snap_counts_2025.csv")
     assert b.URLS["players"].endswith("/players/players.csv")
+    assert b.URLS["draft"].endswith("/draft_picks/draft_picks.csv")
+
+    owners=b.opening_pick_owners(
+        [{'season':'2018','pick':'123','team':'MIA'},{'season':'2018','pick':'188','team':'CLE'}],
+        [],2018,
+    )
+    assert owners[123]=='CLE' and owners[188]=='WAS'
 
     master=b.build_master_index([{'pfr_id':'MayfBa00','display_name':'Baker Mayfield','gsis_id':'00-0034855'}])
     e=b.enrich({'season':'2018','playerid':'MayfBa00','full_name':'Baker Mayfield','position':'QB'},master)

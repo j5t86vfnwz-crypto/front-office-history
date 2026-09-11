@@ -27,6 +27,8 @@ The project is ready for the real 2010–2026 source download, but this local Ch
 - Added official nflreadr dataset coverage contracts and source URL templates.
 - Normalized shorthand and descriptive roster-status labels for free-agent classification.
 - Added a 2018 Cleveland 12-pick historical draft-capital regression anchor to production audit logic.
+- Switched draft classes to nflverse's maintained draft-picks release and added two verified 2018 pick-owner repairs for multi-hop trades missing from the trade table.
+- Added a narrow 2026 Dallas WR-order anchor for the documented Lamb/Pickens pairing when formation depth slots tie.
 - Re-ran source tests, five-pass roster tests, fixture audit, static smoke test, and browser interaction suite with zero failures.
 
 ## Do not publish the fixture build
