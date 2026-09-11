@@ -44,8 +44,12 @@ jobs:
         run: python tests/test_refine_bundle.py
       - name: Build bundled 2010-2026 historical database
         run: python scripts/build_data.py --years 2010:2026 --espn-free-agents
+      - name: Remove impossible cross-team roster duplicates
+        run: python scripts/sanitize_roster_membership.py --file dist/data/offline-data.json
       - name: Refine tied position rooms from role evidence
         run: python scripts/refine_bundle.py --file dist/data/offline-data.json
+      - name: League-wide roster membership audit
+        run: python scripts/audit_membership.py --file dist/data/offline-data.json
       - name: Exhaustive historical-data audit
         run: python scripts/audit_data.py --years 2010:2026 --passes 5
       - name: Build frozen UI against offline database
