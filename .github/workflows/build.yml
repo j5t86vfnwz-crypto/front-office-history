@@ -35,13 +35,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache
-          key: foh-nfl-data-v2-${{ runner.os }}
+          key: foh-nfl-data-v3-${{ runner.os }}
       - name: Source URL/coverage contract
         run: python tests/test_source_contract.py
       - name: Unit-test roster ordering five times
         run: python tests/test_roster_order.py
+      - name: Unit-test final room refinement
+        run: python tests/test_refine_bundle.py
       - name: Build bundled 2010-2026 historical database
         run: python scripts/build_data.py --years 2010:2026 --espn-free-agents
+      - name: Refine tied position rooms from role evidence
+        run: python scripts/refine_bundle.py --file dist/data/offline-data.json
       - name: Exhaustive historical-data audit
         run: python scripts/audit_data.py --years 2010:2026 --passes 5
       - name: Build frozen UI against offline database
