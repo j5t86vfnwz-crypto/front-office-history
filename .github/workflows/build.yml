@@ -12,6 +12,12 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 env:
   PYTHONUNBUFFERED: '1'
@@ -51,8 +57,17 @@ jobs:
           FOH_REQUIRE_BROWSER_QA: '1'
         run: python scripts/browser_smoke.py
       - name: Upload publishable site
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: front-office-history-site
           path: dist/
-          if-no-files-found: error
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

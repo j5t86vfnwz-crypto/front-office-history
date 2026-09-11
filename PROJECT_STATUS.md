@@ -30,6 +30,7 @@ The project is ready for the real 2010–2026 source download, but this local Ch
 - Switched draft classes to nflverse's maintained draft-picks release and anchored Cleveland's verified March 2018 pick inventory where the trade table loses multi-hop ownership.
 - Added a narrow 2026 Dallas WR-order anchor for the documented Lamb/Pickens pairing when formation depth slots tie.
 - Made browser free-agency QA validate the player actually selected from the full market instead of assuming a fixture-only first row.
+- Added an official GitHub Pages artifact and deployment job so successful audited builds publish the playable simulator.
 - Re-ran source tests, five-pass roster tests, fixture audit, static smoke test, and browser interaction suite with zero failures.
 
 ## Do not publish the fixture build
