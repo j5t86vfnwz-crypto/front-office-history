@@ -3,8 +3,9 @@
 
 The historical builder already determines membership and broad depth tiers. This pass
 only resolves ordering *inside* a position room, where formation-based depth charts can
-mark several receivers/backs/defensive backs as co-starters. In those ties, verified
-team anchors and season role evidence outrank source row order.
+mark several receivers/backs/defensive backs as co-starters. In ordinary rooms, official
+depth tier stays authoritative and role evidence breaks ties. Narrow verified anchors
+can override noisy depth slots for exact team/year/room cases.
 """
 from __future__ import annotations
 
@@ -75,14 +76,16 @@ def room_sort_key(player: dict[str, Any], anchor_rank: dict[str, int]) -> tuple[
     tier = intval(player.get("_officialDepthTier"), 99)
     has_tier = tier < 99
     old_order = intval(player.get("room_order") or player.get("_officialRoomOrder"), 999)
-    # A verified anchor is only used inside this exact team/year/room. Otherwise
-    # official tier remains the first authority and season role breaks same-tier ties.
     anchored = normalized in anchor_rank
+
+    # Verified anchors are exact, narrow corrections and therefore outrank noisy
+    # formation depth tiers. Outside those anchors, official depth tier remains the
+    # first authority and season role evidence only breaks ties inside that tier.
     return (
-        0 if has_tier else 1,
-        tier,
         0 if anchored else 1,
         anchor_rank.get(normalized, 999),
+        0 if has_tier else 1,
+        tier,
         -role_evidence(player),
         status_priority(player.get("status")),
         old_order,
@@ -126,8 +129,8 @@ def refine_bundle(bundle: dict[str, Any]) -> tuple[int, int]:
             teams_seen += 1
             rooms_changed += refine_team_roster(year, team, roster)
     bundle["roomOrderRefinement"] = {
-        "version": 1,
-        "rule": "official depth tier, then verified anchor/season role evidence inside tied rooms",
+        "version": 2,
+        "rule": "verified exact anchors first; otherwise official depth tier then season role evidence",
     }
     return teams_seen, rooms_changed
 
