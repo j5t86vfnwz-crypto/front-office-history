@@ -50,17 +50,20 @@ with sync_playwright() as pw:
     page.locator('#resetBtn').click();page.wait_for_timeout(40)
     page.locator('[data-nav="freeagency"]').first.click();page.wait_for_timeout(20)
     checks.append(('free agency renders',page.locator('[data-sign-fa]').count()>0))
+    signed_fa_name=''
     if page.locator('[data-sign-fa]').count():
-        page.locator('[data-sign-fa]').first.click();page.wait_for_timeout(30)
+        fa_row=page.locator('[data-fa-row]').first
+        signed_fa_name=fa_row.locator('.fa-player strong').inner_text()
+        fa_row.locator('[data-sign-fa]').click();page.wait_for_timeout(30)
         page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(20)
-        checks.append(('signing updates roster',page.get_by_text('Kirk Cousins',exact=True).count()==1))
+        checks.append(('signing updates roster',page.get_by_text(signed_fa_name,exact=True).count()==1))
     page.locator('[data-nav="draft"]').first.click();page.wait_for_timeout(20)
     checks.append(('draft starts at pick 1','#1' in page.locator('.draft-pick').inner_text()))
     if page.locator('[data-draft]').count():page.locator('[data-draft]').first.click();page.wait_for_timeout(30)
     page.locator('[data-nav="timeline"]').first.click();page.wait_for_timeout(20)
     timeline=page.locator('.timeline').inner_text()
     checks.append(('draft updates timeline','Drafted Baker Mayfield' in timeline))
-    checks.append(('FA updates timeline','Signed Kirk Cousins' in timeline))
+    checks.append(('FA updates timeline',bool(signed_fa_name) and f'Signed {signed_fa_name}' in timeline))
     # Visible Roster-section regression for the multi-starter 2025+ schema.
     page.select_option('#yearSelect','2026');page.wait_for_timeout(20)
     page.select_option('#teamSelect','Dallas Cowboys');page.wait_for_timeout(80)

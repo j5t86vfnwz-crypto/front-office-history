@@ -29,6 +29,7 @@ The project is ready for the real 2010–2026 source download, but this local Ch
 - Added a 2018 Cleveland 12-pick historical draft-capital regression anchor to production audit logic.
 - Switched draft classes to nflverse's maintained draft-picks release and anchored Cleveland's verified March 2018 pick inventory where the trade table loses multi-hop ownership.
 - Added a narrow 2026 Dallas WR-order anchor for the documented Lamb/Pickens pairing when formation depth slots tie.
+- Made browser free-agency QA validate the player actually selected from the full market instead of assuming a fixture-only first row.
 - Re-ran source tests, five-pass roster tests, fixture audit, static smoke test, and browser interaction suite with zero failures.
 
 ## Do not publish the fixture build
