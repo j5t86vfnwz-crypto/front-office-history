@@ -35,15 +35,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache
-          key: foh-nfl-data-v4-${{ runner.os }}
+          key: foh-nfl-data-v5-${{ runner.os }}
       - name: Source URL/coverage contract
         run: python tests/test_source_contract.py
       - name: Unit-test roster ordering five times
         run: python tests/test_roster_order.py
       - name: Unit-test final room refinement
         run: python tests/test_refine_bundle.py
-      - name: Build bundled 2010-2026 historical database
+      - name: Build bundled 2010-2026 database
         run: python scripts/build_data.py --years 2010:2026 --espn-free-agents
+      - name: Correct roster year mapping for 2010-2025
+        run: python scripts/correct_roster_year_mapping.py --file dist/data/offline-data.json --start 2010 --end 2025
       - name: Remove impossible historical cross-team roster duplicates
         run: python scripts/sanitize_roster_membership.py --file dist/data/offline-data.json
       - name: Refine historical tied position rooms from role evidence
@@ -52,7 +54,7 @@ jobs:
         run: python scripts/rebuild_2026_current.py --file dist/data/offline-data.json
       - name: Current 2026 live NFL roster and position audit
         run: python scripts/audit_2026_live.py --file dist/data/offline-data.json
-      - name: League-wide roster membership audit
+      - name: League-wide roster membership and year-alignment audit
         run: python scripts/audit_membership.py --file dist/data/offline-data.json
       - name: Exhaustive historical-data audit
         run: python scripts/audit_data.py --years 2010:2026 --passes 5
