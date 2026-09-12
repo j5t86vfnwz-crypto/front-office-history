@@ -4,7 +4,9 @@
 Membership authority: NFL.com 2026 roster sitemap for each team.
 Position/status authority: NFL.com current team roster page when parseable.
 Metadata fallbacks: ESPN current roster, then nflverse 2026 roster/weekly data.
-Depth charts/stats are ordering evidence only and may never create membership.
+Every fallback join is team-scoped so same-name players can never contaminate one
+another. Depth charts/stats are ordering evidence only and may never create
+membership.
 """
 from __future__ import annotations
 
@@ -101,10 +103,22 @@ def espn_metadata(team:str)->tuple[str,dict[str,dict[str,Any]]]:
 
 
 def nflverse_index(sd,master_idx):
+    """Index current nflverse records by (canonical team, normalized name).
+
+    Never index by name alone: the NFL can have multiple active players with the
+    same full name (for example the two Justin Jeffersons in 2026).
+    """
     latest=b.latest_weekly_membership(sd.get("weekly") or []);merged={}
     for raw in (sd.get("roster") or [])+list(latest.values()):
-        p=b.enrich(raw,master_idx);name=b.player_name(p)
-        if name:merged[b.norm_name(name)]=p
+        team=b.canonical_team(raw.get("team") or raw.get("club_code") or "")
+        name=b.player_name(raw)
+        if not team or not name:continue
+        p=dict(raw)
+        # Enrich only when an explicit ID exists, so the players master cannot
+        # fall back to an ambiguous same-name join.
+        if any(p.get(k) for k in ("gsis_id","player_id","pfr_id","playerid","espn_id")):
+            p=b.enrich(p,master_idx)
+        merged[(team,b.norm_name(name))]=p
     return merged
 
 
@@ -124,7 +138,12 @@ def current_player(name,team,nfl,espn,nv,master_idx):
     if nv:p.update(nv)
     if espn:p.update({k:v for k,v in espn.items() if v not in (None,"")})
     if nfl:p.update({k:v for k,v in nfl.items() if v not in (None,"")})
-    p["full_name"]=name;p["display_name"]=name;p["team"]=b.BASE_ABBR[team];p=b.enrich(p,master_idx)
+    p["full_name"]=name;p["display_name"]=name;p["team"]=b.BASE_ABBR[team]
+    # Only join the master table through a real identifier. Never allow its
+    # name-only fallback on a current roster player.
+    if any(p.get(k) for k in ("gsis_id","pfr_id","espn_id")):
+        p=b.enrich(p,master_idx)
+        p["full_name"]=name;p["display_name"]=name;p["team"]=b.BASE_ABBR[team]
     p["position"]=specific_position(nfl.get("position"),espn.get("position"),nv.get("position"),p.get("position"))
     p["status"]=b.normalize_status_code(nfl.get("status") or espn.get("status") or nv.get("status") or p.get("status"))
     if b.group_for_pos(p["position"])=="OTHER":raise RuntimeError(f"{team}: unresolved position for official roster player {name}")
@@ -132,7 +151,6 @@ def current_player(name,team,nfl,espn,nv,master_idx):
 
 
 def player_identity(p:dict[str,Any],team:str)->str:
-    # IDs distinguish same-name NFL players such as the two Justin Jeffersons.
     return str(p.get("gsis_id") or p.get("pfr_id") or p.get("espn_id") or f"{b.norm_name(b.player_name(p))}|{b.group_for_pos(p.get('position'))}|{team}")
 
 
@@ -144,7 +162,7 @@ def main():
     ownership={};total=0
     for team in b.TEAMS:
         _,names=nfl_membership(team);_,nfl_meta=nfl_roster_metadata(team,names);_,espn_meta=espn_metadata(team);official={b.norm_name(n):n for n in names};roster=[]
-        for nk,name in official.items():roster.append(current_player(name,team,nfl_meta.get(nk,{}),espn_meta.get(nk,{}),nv.get(nk,{}),master_idx))
+        for nk,name in official.items():roster.append(current_player(name,team,nfl_meta.get(nk,{}),espn_meta.get(nk,{}),nv.get((team,nk),{}),master_idx))
         roster=b.attach_player_evidence(roster,current.get("depth") or [],current.get("stats") or [],current.get("snaps") or [],prior.get("stats") or [],team,2026)
         roster=[p for p in roster if b.norm_name(b.player_name(p)) in official]
         if len(roster)!=len(official):raise RuntimeError(f"{team}: official membership count changed during enrichment")
