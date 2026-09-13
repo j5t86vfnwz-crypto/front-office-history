@@ -50,6 +50,8 @@ jobs:
         run: python scripts/sanitize_roster_membership.py --file dist/data/offline-data.json
       - name: Refine historical tied position rooms from role evidence
         run: python scripts/refine_bundle.py --file dist/data/offline-data.json
+      - name: Clear current roster cache before live rebuild
+        run: python scripts/clear_live_roster_cache.py
       - name: Rebuild 2026 from current NFL rosters
         run: python scripts/rebuild_2026_current.py --file dist/data/offline-data.json
       - name: Lock current 2026 NFL positions
