@@ -2,6 +2,8 @@ name: Build and audit Front Office History
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
   push:
     branches: [ main ]
     paths:
@@ -56,6 +58,8 @@ jobs:
         run: python scripts/rebuild_2026_current.py --file dist/data/offline-data.json
       - name: Lock current 2026 NFL positions
         run: python scripts/lock_2026_official_positions.py --file dist/data/offline-data.json
+      - name: Build current-source consensus report
+        run: python scripts/audit_2026_consensus.py --out dist/data/roster-source-health.json
       - name: Current 2026 live NFL roster and position audit
         run: python scripts/audit_2026_live.py --file dist/data/offline-data.json
       - name: League-wide roster membership and year-alignment audit
