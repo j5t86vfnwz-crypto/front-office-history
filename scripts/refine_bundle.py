@@ -2,10 +2,11 @@
 """Final roster-room quality pass for the generated Front Office History bundle.
 
 The historical builder already determines membership and broad depth tiers. This pass
-only resolves ordering *inside* a position room, where formation-based depth charts can
-mark several receivers/backs/defensive backs as co-starters. In ordinary rooms, official
-depth tier stays authoritative and role evidence breaks ties. Narrow verified anchors
-can override noisy depth slots for exact team/year/room cases.
+resolves ordering *inside* a position room, where formation-based depth charts can mark
+several receivers/backs/defensive backs as co-starters or occasionally put a fringe
+player one tier above a clearly established starter. Exact verified anchors remain the
+strongest correction. Outside anchors, official depth tier is authoritative unless
+season-long role evidence overwhelmingly identifies a one-tier anomaly.
 """
 from __future__ import annotations
 
@@ -23,6 +24,13 @@ VERIFIED_ROOM_PRIORITY: dict[tuple[int, str, str], tuple[str, ...]] = {
     (2025, "Dallas Cowboys", "WR"): ("CeeDee Lamb",),
     (2026, "Dallas Cowboys", "WR"): ("CeeDee Lamb", "George Pickens"),
 }
+
+# Deliberately conservative: only a one-tier discrepancy can be corrected, and only
+# when the lower-listed player has both strong usage and overwhelming role evidence.
+ONE_TIER_PROMOTION_GAP = 420.0
+ONE_TIER_PROMOTION_RATIO = 2.15
+ONE_TIER_PROMOTION_MIN_EVIDENCE = 650.0
+ONE_TIER_PROMOTION_MIN_USAGE = 0.45
 
 
 def norm(value: Any) -> str:
@@ -57,8 +65,15 @@ def status_priority(value: Any) -> int:
     return 4
 
 
+def usage_fraction(player: dict[str, Any]) -> float:
+    stats = player.get("_stats") or {}
+    games = max(1.0, num(player.get("games") or stats.get("games") or stats.get("games_played"), 1.0))
+    starts = max(0.0, num(player.get("starts") or stats.get("starts") or stats.get("games_started")))
+    return max(num(player.get("_starter_rate")), min(1.0, starts / games))
+
+
 def role_evidence(player: dict[str, Any]) -> float:
-    """Comparable same-room evidence; never changes the official broad depth tier."""
+    """Comparable same-room evidence; ordinary cases still respect depth tier."""
     score = num(player.get("_role_score"))
     stats = player.get("_stats") or {}
     games = max(1.0, num(player.get("games") or stats.get("games") or stats.get("games_played"), 1.0))
@@ -70,17 +85,55 @@ def role_evidence(player: dict[str, Any]) -> float:
     return score
 
 
-def room_sort_key(player: dict[str, Any], anchor_rank: dict[str, int]) -> tuple[Any, ...]:
+def should_promote_one_tier(player: dict[str, Any], stronger_tier_players: list[dict[str, Any]]) -> bool:
+    """Return True only for an obvious one-tier source anomaly.
+
+    This is intentionally difficult to trigger. A player must have substantial starter
+    usage and must beat at least one clearly weaker entry in the immediately higher tier by both a large
+    absolute gap and a large ratio. It cannot leap two or more official tiers.
+    """
+    if not stronger_tier_players:
+        return False
+    evidence = role_evidence(player)
+    reference = min(role_evidence(p) for p in stronger_tier_players)
+    return (
+        usage_fraction(player) >= ONE_TIER_PROMOTION_MIN_USAGE
+        and evidence >= ONE_TIER_PROMOTION_MIN_EVIDENCE
+        and evidence - reference >= ONE_TIER_PROMOTION_GAP
+        and evidence >= max(1.0, reference) * ONE_TIER_PROMOTION_RATIO
+    )
+
+
+def effective_tiers(players: list[dict[str, Any]]) -> dict[int, int]:
+    """Compute temporary sort tiers without mutating source depth evidence."""
+    by_tier: dict[int, list[dict[str, Any]]] = {}
+    for player in players:
+        tier = intval(player.get("_officialDepthTier"), 99)
+        if tier < 99:
+            by_tier.setdefault(tier, []).append(player)
+
+    adjusted: dict[int, int] = {}
+    for player in players:
+        tier = intval(player.get("_officialDepthTier"), 99)
+        effective = tier
+        if tier < 99 and tier > 1:
+            previous = by_tier.get(tier - 1, [])
+            if should_promote_one_tier(player, previous):
+                effective = tier - 1
+        adjusted[id(player)] = effective
+    return adjusted
+
+
+def room_sort_key(
+    player: dict[str, Any], anchor_rank: dict[str, int], adjusted_tier: int
+) -> tuple[Any, ...]:
     name = player.get("full_name") or player.get("display_name") or ""
     normalized = norm(name)
-    tier = intval(player.get("_officialDepthTier"), 99)
+    tier = adjusted_tier
     has_tier = tier < 99
     old_order = intval(player.get("room_order") or player.get("_officialRoomOrder"), 999)
     anchored = normalized in anchor_rank
 
-    # Verified anchors are exact, narrow corrections and therefore outrank noisy
-    # formation depth tiers. Outside those anchors, official depth tier remains the
-    # first authority and season role evidence only breaks ties inside that tier.
     return (
         0 if anchored else 1,
         anchor_rank.get(normalized, 999),
@@ -103,8 +156,12 @@ def refine_team_roster(year: int, team: str, roster: list[dict[str, Any]]) -> in
     for group, players in rooms.items():
         anchor = VERIFIED_ROOM_PRIORITY.get((year, team, group), ())
         anchor_rank = {norm(name): index for index, name in enumerate(anchor)}
-        before = [norm(p.get("full_name") or p.get("display_name")) for p in sorted(players, key=lambda p: intval(p.get("room_order"), 999))]
-        players.sort(key=lambda p: room_sort_key(p, anchor_rank))
+        adjusted = effective_tiers(players)
+        before = [
+            norm(p.get("full_name") or p.get("display_name"))
+            for p in sorted(players, key=lambda p: intval(p.get("room_order"), 999))
+        ]
+        players.sort(key=lambda p: room_sort_key(p, anchor_rank, adjusted[id(p)]))
         after = [norm(p.get("full_name") or p.get("display_name")) for p in players]
         if before != after:
             changed += 1
@@ -129,8 +186,11 @@ def refine_bundle(bundle: dict[str, Any]) -> tuple[int, int]:
             teams_seen += 1
             rooms_changed += refine_team_roster(year, team, roster)
     bundle["roomOrderRefinement"] = {
-        "version": 2,
-        "rule": "verified exact anchors first; otherwise official depth tier then season role evidence",
+        "version": 3,
+        "rule": (
+            "verified exact anchors first; otherwise official depth tier with conservative "
+            "one-tier anomaly correction, then season role evidence"
+        ),
     }
     return teams_seen, rooms_changed
 

@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import shutil
 
 ROOT=Path(__file__).resolve().parents[1]
 SRC=ROOT/'src/index.template.html'
 GAME_CSS=ROOT/'src/game_layer.css'
 GAME_JS=ROOT/'src/game_layer.js'
+POLISH_CSS=ROOT/'src/polish_layer.css'
+POLISH_JS=ROOT/'src/polish_layer.js'
 DIST=ROOT/'dist'
 DIST.mkdir(parents=True,exist_ok=True)
 html=SRC.read_text(encoding='utf-8')
 
 # Keep the approved visual language in the frozen template while layering the
-# decision-game UI in a small, independently testable source file.
-if GAME_CSS.exists():
-    game_css=GAME_CSS.read_text(encoding='utf-8')
-    marker='/* Front Office History — game layer */'
-    if marker not in html:
-        html=html.replace('</style>',game_css+'\n</style>',1)
+# decision-game UI and usability polish in small, independently testable files.
+for source, marker in [
+    (GAME_CSS,'/* Front Office History — game layer */'),
+    (POLISH_CSS,'/* Front Office History — usability polish layer */'),
+]:
+    if source.exists() and marker not in html:
+        html=html.replace('</style>',source.read_text(encoding='utf-8')+'\n</style>',1)
 
 # Bundle is loaded before the frozen application script. This works from file:// and HTTPS.
 if '<script src="data/offline-data.js"></script>' not in html:
@@ -37,8 +39,8 @@ function loadBundledScenario(){
   const yd=bundledYearData(),td=bundledTeamData();
   if(!yd||!td)return false;
   state.rosterSeason=Number(td.rosterSeason||state.year-1);
+  // The generated bundle has already passed roster audits. Preserve that order in the browser.
   const hydrated=(td.roster||[]).map(hydrateBundledPlayer);
-  if(typeof refineVisibleRoomOrder==='function')refineVisibleRoomOrder(hydrated,state.team,state.year);
   state.teamRoster=hydrated.sort(sortRoster);state.allRoster=state.teamRoster;
   state.draftClass=(yd.draftClass||[]).map(p=>({...p,actual_pick:Number(p.actual_pick),round:Number(p.round)})).sort((a,b)=>a.actual_pick-b.actual_pick);
   state.pickOwners=new Map(Object.entries(yd.pickOwners||{}).map(([k,v])=>[Number(k),v]));state.basePickOwners=new Map(state.pickOwners);
@@ -54,7 +56,6 @@ function loadBundledTradeTarget(team){
   const td=bundledTeamData(team,state.year);if(!td)return false;
   const expected=team;state.tradeTargetLoading=false;state.tradeTargetError='';
   const hydrated=(td.roster||[]).map(hydrateBundledPlayer);
-  if(typeof refineVisibleRoomOrder==='function')refineVisibleRoomOrder(hydrated,expected,state.year);
   state.tradeTargetRoster=hydrated.filter(p=>!state.leagueDeparted.has(`${expected}|${playerKey(p)}`)).sort(sortRoster);
   render();return true
 }
@@ -66,9 +67,7 @@ if helper.strip() not in html:
 
 if GAME_JS.exists():
     game_js=GAME_JS.read_text(encoding='utf-8')
-    # The generated bundle's verified exact team/year anchors must stay authoritative
-    # in the browser too. The raw game layer originally checked noisy formation depth
-    # tier first, which could undo a verified correction such as Dallas 2026 WR2.
+    # Exact verified anchors should still win in dynamically re-ranked game-layer rooms.
     old_order="if(ah!==bh)return ah?-1:1;if(at!==bt)return at-bt;\n      if(aa!==ba)return aa?-1:1;if(aa&&ba&&priorityMap.get(an)!==priorityMap.get(bn))return priorityMap.get(an)-priorityMap.get(bn);"
     new_order="if(aa!==ba)return aa?-1:1;if(aa&&ba&&priorityMap.get(an)!==priorityMap.get(bn))return priorityMap.get(an)-priorityMap.get(bn);\n      if(ah!==bh)return ah?-1:1;if(at!==bt)return at-bt;"
     if old_order not in game_js:
@@ -77,6 +76,12 @@ if GAME_JS.exists():
     marker='// ===== FRONT OFFICE HISTORY: GAME LAYER ====='
     if marker not in html:
         html=html.replace(needle,game_js+'\n'+needle,1)
+
+if POLISH_JS.exists():
+    polish_js=POLISH_JS.read_text(encoding='utf-8')
+    marker='// ===== FRONT OFFICE HISTORY: USABILITY POLISH ====='
+    if marker not in html:
+        html=html.replace(needle,polish_js+'\n'+needle,1)
 
 scenario_line="const season=state.year-1;state.rosterSeason=season;"
 replacement=scenario_line+"\n  if(window.FOH_OFFLINE_BUNDLE){if(loadBundledScenario())return;state.loading=false;state.error=`Offline data pack missing for ${state.year} ${historicalName(state.team,state.year)}.`;updateChrome();render();return;}"
@@ -88,8 +93,6 @@ trade_replace=trade_guard+"\n  if(window.FOH_OFFLINE_BUNDLE&&loadBundledTradeTar
 if trade_replace not in html:
     html=html.replace(trade_guard,trade_replace,1)
 
-# Source page: make the offline architecture visible without cluttering the product UI.
 html=html.replace('Historical data layer','Bundled historical data',1)
-
 (DIST/'index.html').write_text(html,encoding='utf-8')
 print('Wrote',DIST/'index.html')
