@@ -81,6 +81,12 @@ def indexes(roster):
             if norm(n):names.setdefault(norm(n),p)
     return gsis,espn,names
 
+def index_one(p,gsis,espn,names):
+    if p.get("gsis_id"):gsis[str(p["gsis_id"])]=p
+    if p.get("espn_id"):espn[str(p["espn_id"])]=p
+    for n in (p.get("full_name"),p.get("display_name"),p.get("player_name")):
+        if norm(n):names[norm(n)]=p
+
 def overlay(td,season,team,key,slots):
     roster=list(td.get("roster") or []);gsis,espn,names=indexes(roster);unique=set();added=0
     for p in roster:
@@ -94,8 +100,12 @@ def overlay(td,season,team,key,slots):
             if p is None:
                 p={"full_name":i["name"],"display_name":i["name"],"position":b.canonical_pos(i["source_position"]),"room_group":i["room"],"status":"DEPTH","jersey_number":i["jersey"],"team":team,"gsis_id":i["gsis_id"],"espn_id":i["espn_id"]}
                 roster.append(p);added+=1
+                # Critical: immediately register a source-restored player. The same
+                # player may appear in multiple exact slots (CB + PR, WR + KR, etc.).
+                # Every later source row must attach to this same roster identity.
+                index_one(p,gsis,espn,names)
             e={"section":s["section"],"slot":s["slot"],"source_slot":s["source_slot"],"source_slot_number":s["source_slot_number"],"depth":i["depth"],"slot_order":s["slot_order"],"room":i["room"]}
-            p.setdefault("published_depth_entries",[]).append(e)
+            if e not in p.setdefault("published_depth_entries",[]):p["published_depth_entries"].append(e)
     provider="ESPN via nflverse" if season>=2025 else "NFL Data Exchange via nflverse";source=f"{b.RELEASE}/depth_charts/depth_charts_{season}.csv";snap=key if season>=2025 else f"Week {iv(key)} REG"
     rooms=defaultdict(list)
     for p in roster:
