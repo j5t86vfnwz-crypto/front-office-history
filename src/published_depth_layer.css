@@ -1,0 +1,29 @@
+/* Front Office History — exact published depth chart */
+.published-depth-source{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  margin:0 0 16px;padding:13px 15px;border:1px solid #dbe5e0;border-radius:12px;
+  background:#f8fbf9;
+}
+.published-depth-source strong{display:block;font-size:11px;color:#254a38}
+.published-depth-source span{display:block;margin-top:3px;font-size:9px;color:var(--muted)}
+.published-depth-source a{font-size:10px;font-weight:850;color:var(--team-primary);text-decoration:none}
+.published-depth-source a:hover{text-decoration:underline}
+.published-depth-panel{margin-bottom:16px}
+.published-depth-table{min-width:1220px;table-layout:fixed}
+.published-depth-table th:first-child,.published-depth-table td:first-child{width:72px}
+.published-depth-table th:not(:first-child){min-width:220px}
+.published-slot{background:#f6f9f7;vertical-align:top}
+.published-slot strong{font-size:11px;color:var(--team-primary)}
+.published-depth-cell{vertical-align:top;min-width:220px;padding:10px 12px}
+.published-depth-cell.empty{background:#fbfcfb}
+.published-player-card{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:8px;min-height:40px}
+.published-number{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;background:#edf3f0;color:#52645b;font-size:9px;font-weight:900}
+.published-player-copy{min-width:0}
+.published-player-copy strong{display:block;font-size:10px;line-height:1.25;white-space:normal}
+.published-player-copy small{display:block;margin-top:3px;color:var(--muted);font-size:8px}
+.published-trade{font-size:8px!important;padding:4px!important}
+@media(max-width:760px){
+  .published-depth-source{align-items:flex-start;flex-direction:column}
+  .published-depth-table{min-width:1050px}
+  .published-depth-cell{min-width:185px}
+}
