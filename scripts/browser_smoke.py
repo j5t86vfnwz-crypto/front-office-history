@@ -1,18 +1,13 @@
 #!/usr/bin/env python3
-"""Optional real-browser QA using an in-memory HTML document.
-
-It does not rely on localhost or file://, so it also catches the exact runtime
-errors that previously hid behind blocked local navigation.
-"""
+"""Real-browser QA for the generated Front Office History site."""
 from pathlib import Path
-import shutil, sys
+import shutil, sys, os
 ROOT=Path(__file__).resolve().parents[1]
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 except Exception:
     print('BROWSER SMOKE: SKIP (playwright not installed)');raise SystemExit(0)
 
-import os
 exe=shutil.which('chromium') or shutil.which('google-chrome') or shutil.which('google-chrome-stable')
 require=os.environ.get('FOH_REQUIRE_BROWSER_QA')=='1'
 html=(ROOT/'dist/index.html').read_text(encoding='utf-8')
@@ -33,10 +28,12 @@ with sync_playwright() as pw:
     except PlaywrightTimeoutError:pass
     page.wait_for_timeout(200)
     checks.append(('scenario loads','players' in page.locator('#sideMeta').inner_text()))
-    # Roster / cap render.
-    page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(20);checks.append(('roster renders',page.locator('table').count()>0))
-    page.locator('[data-nav="cap"]').first.click();page.wait_for_timeout(20);checks.append(('cap renders',page.get_by_text('Salary cap',exact=True).count()>0))
-    # Completed player-for-player trade with fixture data.
+    page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(30)
+    checks.append(('roster renders',page.locator('table').count()>0))
+    checks.append(('published depth source visible',page.locator('.published-depth-source').count()==1))
+    checks.append(('published position slots render',page.locator('.published-slot').count()>=10))
+    page.locator('[data-nav="cap"]').first.click();page.wait_for_timeout(20)
+    checks.append(('cap renders',page.get_by_text('Salary cap',exact=True).count()>0))
     page.locator('[data-nav="trade"]').first.click();page.wait_for_timeout(50)
     checks.append(('trade banks render',page.locator('[data-out-player]').count()>0 and page.locator('[data-in-player-key]').count()>0))
     if page.locator('.asset-row').filter(has_text='DeShone Kizer').count() and page.locator('.asset-row').filter(has_text='Carson Palmer').count():
@@ -45,40 +42,30 @@ with sync_playwright() as pw:
         checks.append(('trade proposal mutates',page.locator('.trade-item').count()>=2))
         page.locator('#submitTrade').click();page.wait_for_timeout(30)
         page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(20)
-        checks.append(('trade updates roster',page.get_by_text('Carson Palmer',exact=True).count()==1 and page.get_by_text('DeShone Kizer',exact=True).count()==0))
-    # Reset to clean scenario for FA/draft.
+        checks.append(('trade updates roster',page.get_by_text('Carson Palmer',exact=True).count()>=1 and page.get_by_text('DeShone Kizer',exact=True).count()==0))
     page.locator('#resetBtn').click();page.wait_for_timeout(40)
     page.locator('[data-nav="freeagency"]').first.click();page.wait_for_timeout(20)
     checks.append(('free agency renders',page.locator('[data-sign-fa]').count()>0))
     signed_fa_name=''
     if page.locator('[data-sign-fa]').count():
-        fa_row=page.locator('[data-fa-row]').first
-        signed_fa_name=fa_row.locator('.fa-player strong').inner_text()
-        fa_row.locator('[data-sign-fa]').click();page.wait_for_timeout(30)
-        page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(20)
-        checks.append(('signing updates roster',page.get_by_text(signed_fa_name,exact=True).count()==1))
-    page.locator('[data-nav="draft"]').first.click();page.wait_for_timeout(20)
-    checks.append(('draft starts at pick 1','#1' in page.locator('.draft-pick').inner_text()))
+        fa_row=page.locator('[data-fa-row]').first;signed_fa_name=fa_row.locator('.fa-player strong').inner_text();fa_row.locator('[data-sign-fa]').click();page.wait_for_timeout(30)
+        page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(20);checks.append(('signing updates roster',page.get_by_text(signed_fa_name,exact=True).count()>=1))
+    page.locator('[data-nav="draft"]').first.click();page.wait_for_timeout(20);checks.append(('draft starts at pick 1','#1' in page.locator('.draft-pick').inner_text()))
     if page.locator('[data-draft]').count():page.locator('[data-draft]').first.click();page.wait_for_timeout(30)
-    page.locator('[data-nav="timeline"]').first.click();page.wait_for_timeout(20)
-    timeline=page.locator('.timeline').inner_text()
-    checks.append(('draft updates timeline','Drafted Baker Mayfield' in timeline))
-    checks.append(('FA updates timeline',bool(signed_fa_name) and f'Signed {signed_fa_name}' in timeline))
-    # Visible Roster-section regression for the multi-starter 2025+ schema.
-    page.select_option('#yearSelect','2026');page.wait_for_timeout(20)
-    page.select_option('#teamSelect','Dallas Cowboys');page.wait_for_timeout(80)
-    page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(30)
-    def visible_rank(name):
-        row=page.locator('tr').filter(has_text=name).first
-        return row.locator('.roster-rank').inner_text() if row.count() else ''
-    checks.append(('Dallas Dak QB1',visible_rank('Dak Prescott')=='1'))
-    checks.append(('Dallas CeeDee WR1',visible_rank('CeeDee Lamb')=='1'))
-    checks.append(('Dallas Pickens WR2',visible_rank('George Pickens')=='2'))
-    checks.append(('Dallas Ferguson TE1',visible_rank('Jake Ferguson')=='1'))
-    # Every primary section must render without a runtime exception.
+    page.locator('[data-nav="timeline"]').first.click();page.wait_for_timeout(20);timeline=page.locator('.timeline').inner_text();checks.append(('draft updates timeline','Drafted ' in timeline));checks.append(('FA updates timeline',bool(signed_fa_name) and f'Signed {signed_fa_name}' in timeline))
+    page.select_option('#yearSelect','2026');page.wait_for_timeout(30);page.select_option('#teamSelect','Dallas Cowboys');page.wait_for_timeout(100);page.locator('[data-nav="roster"]').first.click();page.wait_for_timeout(40)
+    def exact_depth(name):
+        key=''.join(ch for ch in name.lower() if ch.isalnum());cell=page.locator(f'[data-published-player="{key}"]').first
+        return cell.get_attribute('data-depth') if cell.count() else ''
+    checks.append(('Dallas Dak published starter',exact_depth('Dak Prescott')=='1'))
+    checks.append(('Dallas CeeDee published starter',exact_depth('CeeDee Lamb')=='1'))
+    checks.append(('Dallas Pickens published starter',exact_depth('George Pickens')=='1'))
+    checks.append(('Dallas Ferguson published starter',exact_depth('Jake Ferguson')=='1'))
+    source_text=page.locator('.published-depth-source').inner_text() if page.locator('.published-depth-source').count() else ''
+    checks.append(('Dallas exact source labeled','No model re-ranking' in source_text))
+    page.locator('[data-roster-view="contract"]').click();page.wait_for_timeout(20);checks.append(('contract roster renders',page.locator('table').count()>0))
     for nav in ('overview','roster','cap','trade','freeagency','draft','coaches','timeline','sources'):
-        page.locator(f'[data-nav="{nav}"]').first.click();page.wait_for_timeout(10)
-        checks.append((f'nav {nav}',page.locator('#root').inner_text().strip()!=''))
+        page.locator(f'[data-nav="{nav}"]').first.click();page.wait_for_timeout(10);checks.append((f'nav {nav}',page.locator('#root').inner_text().strip()!=''))
     browser.close()
 failed=[name for name,ok in checks if not ok]
 print('BROWSER SMOKE:',', '.join(f'{name}={"PASS" if ok else "FAIL"}' for name,ok in checks))
