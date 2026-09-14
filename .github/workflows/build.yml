@@ -37,13 +37,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache
-          key: foh-nfl-data-v5-${{ runner.os }}
+          key: foh-nfl-data-v6-${{ runner.os }}
       - name: Source URL/coverage contract
         run: python tests/test_source_contract.py
       - name: Unit-test roster ordering five times
         run: python tests/test_roster_order.py
       - name: Unit-test final room refinement
         run: python tests/test_refine_bundle.py
+      - name: Syntax-check exact published depth pipeline
+        run: python -m py_compile scripts/apply_exact_depth_snapshots.py scripts/audit_exact_depth.py
       - name: Build bundled 2010-2026 database
         run: python scripts/build_data.py --years 2010:2026 --espn-free-agents
       - name: Correct roster year mapping for 2010-2025
@@ -62,6 +64,10 @@ jobs:
         run: python scripts/audit_2026_consensus.py --out dist/data/roster-source-health.json
       - name: Current 2026 live NFL roster and position audit
         run: python scripts/audit_2026_live.py --file dist/data/offline-data.json
+      - name: Apply exact published depth-chart snapshots
+        run: python scripts/apply_exact_depth_snapshots.py --file dist/data/offline-data.json --years 2010:2026
+      - name: Exact published depth-chart audit
+        run: python scripts/audit_exact_depth.py --file dist/data/offline-data.json --years 2010:2026
       - name: League-wide roster membership and year-alignment audit
         run: python scripts/audit_membership.py --file dist/data/offline-data.json
       - name: Exhaustive historical-data audit
